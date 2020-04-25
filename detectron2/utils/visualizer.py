@@ -316,7 +316,8 @@ class Visualizer:
                 to be in the range [0, 255].
             metadata (MetadataCatalog): image metadata.
         """
-        self.img = np.asarray(img_rgb).clip(0, 255).astype(np.uint8)
+        # self.img = np.asarray(img_rgb).clip(0, 255).astype(np.uint8)
+        self.img = np.zeros_like(img_rgb).clip(0, 255).astype(np.uint8)
         self.metadata = metadata
         self.output = VisImage(self.img, scale=scale)
         self.cpu_device = torch.device("cpu")
@@ -327,7 +328,7 @@ class Visualizer:
         )
         self._instance_mode = instance_mode
 
-    def draw_instance_predictions(self, predictions):
+    def draw_instance_predictions(self, predictions, dynamic_scores=None):
         """
         Draw instance-level prediction results on an image.
 
@@ -351,7 +352,10 @@ class Visualizer:
         else:
             masks = None
 
-        if self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
+        if dynamic_scores is not None:
+            colors = [dynamic_scores[c] for c in classes]
+            alpha = 1.0
+        elif self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
             colors = [
                 self._jitter([x / 255 for x in self.metadata.thing_colors[c]]) for c in classes
             ]
@@ -367,14 +371,22 @@ class Visualizer:
             )
             alpha = 0.3
 
-        self.overlay_instances(
-            masks=masks,
-            boxes=boxes,
-            labels=labels,
-            keypoints=keypoints,
-            assigned_colors=colors,
-            alpha=alpha,
-        )
+        if dynamic_scores is not None:
+            self.overlay_instances(
+                masks=masks,
+                assigned_colors=colors,
+                alpha=alpha,
+            )
+        else:
+            self.overlay_instances(
+                masks=masks,
+                boxes=boxes,
+                labels=labels,
+                keypoints=keypoints,
+                assigned_colors=colors,
+                alpha=alpha,
+            )
+
         return self.output
 
     def draw_sem_seg(self, sem_seg, area_threshold=None, alpha=0.8):
@@ -1031,8 +1043,10 @@ class Visualizer:
             segment,
             fill=True,
             facecolor=mplc.to_rgb(color) + (alpha,),
-            edgecolor=edge_color,
-            linewidth=max(self._default_font_size // 15 * self.output.scale, 1),
+            # edgecolor=edge_color,
+            edgecolor=mplc.to_rgb(color) + (alpha,),
+            # linewidth=max(self._default_font_size // 15 * self.output.scale, 1),
+            linewidth=5,
         )
         self.output.ax.add_patch(polygon)
         return self.output
